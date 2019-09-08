@@ -28,10 +28,6 @@ class Descarregador(QMainWindow):
         self.widgetProces=QWidget(self.centralWidget)
         self.layout.addWidget(self.widgetProces)
 
-        self.progres=QProgressBar(self.centralWidget)
-        self.layout.addWidget(self.progres)
-        self.progres.hide()
-
 
         self.textEdit=QTextEdit(self.centralWidget)
         self.textEdit.textChanged.connect(lambda: self.botoDescarregar.setEnabled(self.textEdit.toPlainText()!=''))
@@ -101,13 +97,6 @@ class Descarregador(QMainWindow):
         except:
             os.chdir(QDir.homePath())
         links=self.arreglaText(self.textEdit.toPlainText()).split(' ')
-        self.progres.show()
-        self.progres.setMinimum(0)
-        self.progres.setMaximum(len(links))
-        self.progres.setValue(0)
-        QApplication.processEvents()
-        i=1
-        self.setCursor(Qt.WaitCursor)
         opts={'outtmpl':'%(title)s.%(ext)s'}
         if self.cbMP3.isChecked():
             opts['postprocessors']=[{
@@ -117,7 +106,7 @@ class Descarregador(QMainWindow):
             }]
         self.threads=[]
         self.wids=[]
-        self.layoutProces=QHBoxLayout()
+        self.layoutProces=QVBoxLayout()
         self.widgetProces.setLayout(self.layoutProces)
         for link in links:
             self.wids.append(QWidget(self.widgetProces))
@@ -127,19 +116,36 @@ class Descarregador(QMainWindow):
             self.threads[-1].start()
         #ydl.download(links)
         self.textEdit.setText('')
-        self.progres.hide()
-        self.setCursor(Qt.ArrowCursor)
 class DescarregaFil(QThread):
     def __init__(self,ydl_opts,link,widget):
         print('Comencem la init')
         super().__init__()
         print('Fem la init')
-        self.ydl_opts=ydl_opts
+        def hook(d):
+            if not hasattr(self,'maxim'):
+                self.maxim=True
+                self.progressBar.setMaximum(d['total_bytes'])
+            self.progressBar.setValue(d['downloaded_bytes'])
+            QApplication.processEvents()
+            print(d)
+        self.ydl_opts={**ydl_opts}
+        self.ydl_opts['progress_hooks']=[hook]
         self.link=link
         self.widget=widget
         self.layout=QHBoxLayout()
         self.widget.setLayout(self.layout)
-        self.layout.addWidget(QLabel('Exemple'))
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            meta=ydl.extract_info(link,download=False)
+            #print(meta)
+            titol=meta['title']
+        self.lbl=QLabel(titol)
+        self.lbl.setWordWrap(True)
+        self.progressBar=QProgressBar(self.widget)
+        self.progressBar.setMinimum(0)
+        #self.progressBar.setMaximum(num_bytes)
+        self.progressBar.setValue(0)
+        self.layout.addWidget(self.lbl)
+        self.layout.addWidget(self.progressBar)
         print(link)
         print('Init feta')
     def __del__(self):
