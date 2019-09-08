@@ -1,8 +1,10 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction
+from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtCore import Qt, QDir, QObject, QThread
 import youtube_dl
 import sys
+import os
+import re
 
 
 class Descarregador(QMainWindow):
@@ -10,7 +12,7 @@ class Descarregador(QMainWindow):
         super().__init__()
         titol='Descarregador de vídeos de YouTube'
         self.setWindowTitle(titol)
-        self.setMinimumSize(800,600)
+        self.setMinimumSize(600,600)
         self.layout=QVBoxLayout()
         self.centralWidget=QWidget(self)
         self.centralWidget.setLayout(self.layout)
@@ -20,8 +22,11 @@ class Descarregador(QMainWindow):
         self.lblTitol.setFont(QFont('Segoe UI Light',14,QFont.Bold))
         self.layout.addWidget(self.lblTitol)
 
-        self.lblTextExplicacio=QLabel('Introdueix els enllaços dels vídeos que vols descarregar, un per cada línia.',self.centralWidget)
+        self.lblTextExplicacio=QLabel('Introdueix els enllaços dels vídeos que vols descarregar, separats per espais i/o salts de línia.\nTot el que hi hagi a partir del caràcter # serà ignorat.',self.centralWidget)
         self.layout.addWidget(self.lblTextExplicacio)
+
+        self.widgetProces=QWidget(self.centralWidget)
+        self.layout.addWidget(self.widgetProces)
 
         self.progres=QProgressBar(self.centralWidget)
         self.layout.addWidget(self.progres)
@@ -41,12 +46,61 @@ class Descarregador(QMainWindow):
         self.botoDescarregar.setEnabled(False)
         self.layoutInferior.addWidget(self.botoDescarregar)
         self.botoDescarregar.clicked.connect(self.descarrega)
+        self.defineixMenuBar()
+    def defineixMenuBar(self):
+        menubar=self.menuBar()
+        arxiu=menubar.addMenu('Arxiu')
+        #Més menús (si calen)
 
+        actNou=QAction('Nou',self)
+        actNou.setShortcuts(QKeySequence.New)
+        actNou.setStatusTip('Crea una descàrrega nova')
+        actNou.triggered.connect(lambda: self.textEdit.setText(''))
+
+        actObrir=QAction('Obrir',self)
+        actObrir.setShortcuts(QKeySequence.Open)
+        actObrir.setStatusTip('Carrega una llista de vídeos per descarregar')
+        actObrir.triggered.connect(self.obrir)
+
+        actDesar=QAction('Desar',self)
+        actDesar.setShortcuts(QKeySequence.Save)
+        actDesar.setStatusTip('Desa la llista de vídeos per descarregar')
+        actDesar.triggered.connect(self.desar)
+
+
+        arxiu.addAction(actNou)
+        arxiu.addAction(actObrir)
+        arxiu.addAction(actDesar)
+    def obrir(self):
+        #filtrar per arxius de text (?)
+        arxiu,_=QFileDialog.getOpenFileName(self,'Obrir...',QDir.homePath())
+        print(arxiu)
+        with open(arxiu) as f:
+            self.textEdit.setText(f.read())
+    def desar(self):
+        arxiu,_=QFileDialog.getSaveFileName(self,'Desar...',QDir.homePath())
+        with open(arxiu,'w') as f:
+            f.write(self.textEdit.toPlainText())
+        pass
+    def arreglaText(self,text):
+        '''Elimina tots els comentaris (que, bàsicament, comencen per # i fins al final de la línia. També substitueix espais i tabs per salts de línia
+        '''
+        text=re.sub('#.*','',text)
+        text=text.replace('\n',' ')
+        text=text.replace('\t',' ')
+        text=re.sub('\s\s+','\s',text)
+        text=text.strip()
+        print(text)
+        return text
+        pass
     def descarrega(self):
         #triar el directori de descàrrega
-        directori=QFileDialog.getExistingDirectory(self.centralWidget)
-
-        links=self.textEdit.toPlainText().split('\n')
+        directori=QFileDialog.getExistingDirectory(self.centralWidget,'Desar a',QDir.homePath())
+        try:
+            os.chdir(directori)
+        except:
+            os.chdir(QDir.homePath())
+        links=self.arreglaText(self.textEdit.toPlainText()).split(' ')
         self.progres.show()
         self.progres.setMinimum(0)
         self.progres.setMaximum(len(links))
@@ -61,16 +115,42 @@ class Descarregador(QMainWindow):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }]
-        with youtube_dl.YoutubeDL(opts) as ydl:
-            for x in links:
-                ydl.download([x])
-                self.progres.setValue(i)
-                QApplication.processEvents()
-                i+=1
-            #ydl.download(links)
+        self.threads=[]
+        self.wids=[]
+        self.layoutProces=QHBoxLayout()
+        self.widgetProces.setLayout(self.layoutProces)
+        for link in links:
+            self.wids.append(QWidget(self.widgetProces))
+            self.layoutProces.addWidget(self.wids[-1])
+            print('Anem a declarar el thread')
+            self.threads.append(DescarregaFil(opts,link,self.wids[-1]))
+            self.threads[-1].start()
+        #ydl.download(links)
         self.textEdit.setText('')
         self.progres.hide()
         self.setCursor(Qt.ArrowCursor)
+class DescarregaFil(QThread):
+    def __init__(self,ydl_opts,link,widget):
+        print('Comencem la init')
+        super().__init__()
+        print('Fem la init')
+        self.ydl_opts=ydl_opts
+        self.link=link
+        self.widget=widget
+        self.layout=QHBoxLayout()
+        self.widget.setLayout(self.layout)
+        self.layout.addWidget(QLabel('Exemple'))
+        print(link)
+        print('Init feta')
+    def __del__(self):
+        self.wait()
+        pass
+    def run(self):
+        print('Anem a declarar el descarregador')
+        ydl=youtube_dl.YoutubeDL(self.ydl_opts)
+        print('Començarem a descarregar')
+        ydl.download([self.link])
+        self.widget.hide()
 
 
 if __name__=='__main__':
