@@ -70,7 +70,6 @@ class Descarregador(QMainWindow):
     def obrir(self):
         #filtrar per arxius de text (?)
         arxiu,_=QFileDialog.getOpenFileName(self,'Obrir...',QDir.homePath())
-        print(arxiu)
         with open(arxiu) as f:
             self.textEdit.setText(f.read())
     def desar(self):
@@ -86,7 +85,6 @@ class Descarregador(QMainWindow):
         text=text.replace('\t',' ')
         text=re.sub('\s\s+','\s',text)
         text=text.strip()
-        print(text)
         return text
         pass
     def descarrega(self):
@@ -111,23 +109,19 @@ class Descarregador(QMainWindow):
         for link in links:
             self.wids.append(QWidget(self.widgetProces))
             self.layoutProces.addWidget(self.wids[-1])
-            print('Anem a declarar el thread')
             self.threads.append(DescarregaFil(opts,link,self.wids[-1]))
             self.threads[-1].start()
         #ydl.download(links)
         self.textEdit.setText('')
 class DescarregaFil(QThread):
     def __init__(self,ydl_opts,link,widget):
-        print('Comencem la init')
         super().__init__()
-        print('Fem la init')
         def hook(d):
             if not hasattr(self,'maxim'):
                 self.maxim=True
                 self.progressBar.setMaximum(d['total_bytes'])
             self.progressBar.setValue(d['downloaded_bytes'])
             QApplication.processEvents()
-            print(d)
         self.ydl_opts={**ydl_opts}
         self.ydl_opts['progress_hooks']=[hook]
         self.link=link
@@ -136,25 +130,21 @@ class DescarregaFil(QThread):
         self.widget.setLayout(self.layout)
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             meta=ydl.extract_info(link,download=False)
-            #print(meta)
             titol=meta['title']
         self.lbl=QLabel(titol)
         self.lbl.setWordWrap(True)
         self.progressBar=QProgressBar(self.widget)
+        self.progressBar.setFixedWidth(400)
         self.progressBar.setMinimum(0)
         #self.progressBar.setMaximum(num_bytes)
         self.progressBar.setValue(0)
         self.layout.addWidget(self.lbl)
         self.layout.addWidget(self.progressBar)
-        print(link)
-        print('Init feta')
     def __del__(self):
         self.wait()
         pass
     def run(self):
-        print('Anem a declarar el descarregador')
         ydl=youtube_dl.YoutubeDL(self.ydl_opts)
-        print('Començarem a descarregar')
         ydl.download([self.link])
         self.widget.hide()
 
