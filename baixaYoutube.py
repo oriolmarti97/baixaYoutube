@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction, QScrollArea
 from PyQt5.QtGui import QFont, QKeySequence
-from PyQt5.QtCore import Qt, QDir, QObject, QThread
+from PyQt5.QtCore import Qt, QDir, QObject, QThread, pyqtSignal
 import youtube_dl
 import sys
 import os
@@ -26,8 +26,9 @@ class Descarregador(QMainWindow):
             'Introdueix els enllaços dels vídeos que vols descarregar, separats per espais i/o salts de línia.\nTot el que hi hagi a partir del caràcter # serà ignorat.', self.centralWidget)
         self.layout.addWidget(self.lblTextExplicacio)
 
-        self.widgetProces = QWidget(self.centralWidget)
-        self.layout.addWidget(self.widgetProces)
+        self.layoutProces = QVBoxLayout()
+        self.layoutProces.setSpacing(0)
+        self.layout.addLayout(self.layoutProces)
 
         self.textEdit = QTextEdit(self.centralWidget)
         self.textEdit.textChanged.connect(
@@ -81,7 +82,6 @@ class Descarregador(QMainWindow):
             self, 'Desar...', QDir.homePath())
         with open(arxiu, 'w') as f:
             f.write(self.textEdit.toPlainText())
-        pass
 
     def arreglaText(self, text):
         '''Elimina tots els comentaris (que, bàsicament, comencen per # i fins al final de la línia. També substitueix espais i tabs per salts de línia
@@ -92,9 +92,29 @@ class Descarregador(QMainWindow):
         text = re.sub('\s\s+', '\s', text)
         text = text.strip()
         return text
-        pass
 
     def descarrega(self):
+        #Crea un mostrador de procés (bàsicament conté una label i una progress bar) per un dels threads. Tot penja d'un widget perquè així és més fàcil destruir-ho tot. S'elimina aquest i ja
+        def mostradorProces():
+            '''El mostrador serà un widget que contindrà un layout i, a dins d'aquest, una label i una progressbar. 
+            La label indicarà quin vídeo estem descarregant, i la progressbar per on anem
+            Podria fer-ho amb una subclasse de QWidget que fes això en el seu init, però no veig què m'aporta
+            '''
+            wid=QWidget(self.centralWidget)
+            self.layoutProces.addWidget(wid)
+            layout = QHBoxLayout()
+            wid.setLayout(layout)
+            lbl = QLabel(wid)
+            lbl.setWordWrap(True)
+            progressBar = QProgressBar(wid)
+            progressBar.setFixedWidth(400)
+            progressBar.setMinimum(0)
+            progressBar.setValue(0)
+            layout.addWidget(lbl)
+            layout.addWidget(progressBar)
+            return wid, lbl, progressBar
+        self.textEdit.setEnabled(False) #Mentre descarreguem no volem deixar que ens toquin re
+        self.textEdit.setEnabled(False) #Mentre descarreguem no volem deixar que ens toquin ress
         # triar el directori de descàrrega
         directori = QFileDialog.getExistingDirectory(
             self.centralWidget, 'Desar a', QDir.homePath())
@@ -103,6 +123,7 @@ class Descarregador(QMainWindow):
         except:
             os.chdir(QDir.homePath())
         links = self.arreglaText(self.textEdit.toPlainText()).split(' ')
+        #El títol de l'arxiu serà el titol del vídeo amb la seva extensió, sense timestamp. El programa serà silenciós, no mostrarà porqueries a la terminal
         opts = {'outtmpl': '%(title)s.%(ext)s', 'quiet': True}
         if self.cbMP3.isChecked():
             opts['postprocessors'] = [{
@@ -110,62 +131,67 @@ class Descarregador(QMainWindow):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }]
-        self.threads = []
-        self.wids = []
-        if hasattr(self, 'layoutProces'):
-            delattr(self, 'layoutProces')
-        self.layoutProces = QVBoxLayout()
-        self.widgetProces.setLayout(self.layoutProces)
-        for link in links:
-            self.wids.append(QWidget(self.widgetProces))
-            self.layoutProces.addWidget(self.wids[-1])
-            self.threads.append(DescarregaFil(opts, link, self.wids[-1]))
-            self.threads[-1].start()
-        # ydl.download(links)
-        self.textEdit.setText('')
+        numThreads=QThread.idealThreadCount()
+        n=len(links)
+        k=n//numThreads #k serà la quantitat de vídeos que descarrega cada fil
+        k+= 1 if n%numThreads!=0 else 0
+        #Convertim la llista en una sèrie de llistes de mida k
+        #Com que n no necessàriament és múltiple de k, posem el mínim per no accedir a fora de la llista
+        links_per_thread=[links[i:min(i+k,n)] for i in range(0,n,k)]
+        mostradors=[]
+        i=0
+        self.per_acabar=k #Inicialment cap ha acabat, de manera que queden tots per acabar
+        def acabat(i):
+            self.per_acabar-=1
+            if self.per_acabar==0:
+                self.textEdit.setText('')
+        for link in links_per_thread:
+            mostradors.append(mostradorProces())
+            def actualitza(titol,valor, valor_max, i):
+                mostradors[i][1].setText(titol)
+                mostradors[i][2].setValue(valor)
+                mostradors[i][2].setMaximum(valor_max)
+            def elimina(i):
+                mostradors[i][0].hide()
+                self.layoutProces.removeWidget(mostradors[i][0])
+                self.per_acabar-=1
+                if self.per_acabar==0:
+                    self.textEdit.setText('')
+                    self.textEdit.setEnabled(True)
+            thread=DescarregaFil(opts, link, i)
+            thread.actualitzaBarra.connect(actualitza)
+            thread.finalitzat.connect(elimina)
+            thread.start()
+            i+=1
 
 
 class DescarregaFil(QThread):
-    def __init__(self, ydl_opts, link, widget):
+    #La senyal passarà un string (títol) i tres enters (valor, valor màxim i número de thread)
+    actualitzaBarra=pyqtSignal(str,int,int,int)
+    #Passa un enter, que és el número de thread
+    finalitzat=pyqtSignal(int)
+    def __init__(self, ydl_opts, links, num_thread):
         super().__init__()
-
+        self.num_thread=num_thread
         def hook(d):
             try:
-                if not hasattr(self, 'maxim'):
-                    self.maxim = True
-                    self.progressBar.setMaximum(d['total_bytes'])
-                self.progressBar.setValue(d['downloaded_bytes'])
-                QApplication.processEvents()
+                self.actualitzaBarra.emit(d['filename'],d['downloaded_bytes'],d['total_bytes'],self.num_thread)
+                #self.lbl.setText(d['filename'])
+                #self.progressBar.setMaximum(d['total_bytes'])
+                #self.progressBar.setValue(d['downloaded_bytes'])
             except:
                 pass
         self.ydl_opts = {**ydl_opts}
         self.ydl_opts['progress_hooks'] = [hook]
-        self.link = link
-        self.widget = widget
-        self.layout = QHBoxLayout()
-        self.widget.setLayout(self.layout)
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            meta = ydl.extract_info(link, download=False)
-            titol = meta['title']
-        self.lbl = QLabel(titol)
-        self.lbl.setWordWrap(True)
-        self.progressBar = QProgressBar(self.widget)
-        self.progressBar.setFixedWidth(400)
-        self.progressBar.setMinimum(0)
-        # self.progressBar.setMaximum(num_bytes)
-        self.progressBar.setValue(0)
-        self.layout.addWidget(self.lbl)
-        self.layout.addWidget(self.progressBar)
+        self.links = links
 
     def __del__(self):
         self.wait()
-        del(self.widget)
-        pass
 
     def run(self):
         ydl = youtube_dl.YoutubeDL(self.ydl_opts)
-        ydl.download([self.link])
-        self.widget.hide()
+        ydl.download(self.links)
+        self.finalitzat.emit(self.num_thread)
 
 
 if __name__ == '__main__':
