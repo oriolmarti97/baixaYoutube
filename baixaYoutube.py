@@ -121,15 +121,15 @@ class Descarregador(QMainWindow):
             layout.addWidget(lbl)
             layout.addWidget(progressBar)
             return wid, lbl, progressBar
-        self.textEdit.setEnabled(False) #Mentre descarreguem no volem deixar que ens toquin re
-        self.textEdit.setEnabled(False) #Mentre descarreguem no volem deixar que ens toquin ress
+        self.textEdit.setEnabled(False) #Mentre descarreguem no volem deixar que ens toquin res
         # triar el directori de descàrrega
         directori = QFileDialog.getExistingDirectory(
             self.centralWidget, 'Desar a', QDir.homePath())
         try:
             os.chdir(directori)
         except:
-            os.chdir(QDir.homePath())
+            self.textEdit.setEnabled(True)
+            return
         links = self.arreglaText(self.textEdit.toPlainText()).split(' ')
         #El títol de l'arxiu serà el titol del vídeo amb la seva extensió, sense timestamp. El programa serà silenciós, no mostrarà porqueries a la terminal
         opts = {'outtmpl': '%(title)s.%(ext)s', 'quiet': True}
