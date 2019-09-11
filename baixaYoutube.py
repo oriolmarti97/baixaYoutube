@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction, QScrollArea
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction, QScrollArea, QComboBox
 from PyQt5.QtGui import QFont, QKeySequence
 from PyQt5.QtCore import Qt, QDir, QObject, QThread, pyqtSignal
 import youtube_dl
@@ -39,6 +39,14 @@ class Descarregador(QMainWindow):
         self.layout.addLayout(self.layoutInferior)
         self.cbMP3 = QCheckBox('Descarrega només àudio', self)
         self.layoutInferior.addWidget(self.cbMP3)
+        layoutThreads=QHBoxLayout()
+        lblThreads=QLabel('Nombre de fils:')
+        self.cbThreads=QComboBox(self.centralWidget)
+        self.cbThreads.addItems([str(i) for i in range(1,QThread.idealThreadCount())])
+        self.cbThreads.setCurrentIndex(self.cbThreads.count()-1)
+        layoutThreads.addWidget(lblThreads)
+        layoutThreads.addWidget(self.cbThreads)
+        self.layoutInferior.addLayout(layoutThreads)
         self.layoutInferior.addStretch()
         self.botoDescarregar = QPushButton('Descarregar', self.centralWidget)
         self.botoDescarregar.setEnabled(False)
@@ -131,7 +139,7 @@ class Descarregador(QMainWindow):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }]
-        numThreads=QThread.idealThreadCount()
+        numThreads=int(self.cbThreads.currentText())
         n=len(links)
         k=n//numThreads #k serà la quantitat de vídeos que descarrega cada fil
         k+= 1 if n%numThreads!=0 else 0
