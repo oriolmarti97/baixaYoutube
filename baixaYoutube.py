@@ -145,6 +145,7 @@ class Descarregador(QMainWindow):
             wid=QWidget(self.centralWidget)
             self.layoutProces.addWidget(wid)
             layout = QHBoxLayout()
+            layout.setSpacing(0)
             wid.setLayout(layout)
             lbl = QLabel(wid)
             lbl.setWordWrap(True)
@@ -217,6 +218,7 @@ class DescarregaFil(QThread):
         self.num_thread=num_thread
         def hook(d):
             try:
+                print(d)
                 self.actualitzaBarra.emit(d['filename'],d['downloaded_bytes'],d['total_bytes'],self.num_thread)
                 #self.lbl.setText(d['filename'])
                 #self.progressBar.setMaximum(d['total_bytes'])
