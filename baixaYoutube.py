@@ -166,7 +166,7 @@ class Descarregador(QMainWindow):
             return
         links = self.arreglaText(self.textEdit.toPlainText()).split(' ')
         #El títol de l'arxiu serà el titol del vídeo amb la seva extensió, sense timestamp. El programa serà silenciós, no mostrarà porqueries a la terminal
-        opts = {'outtmpl': '%(title)s.%(ext)s', 'quiet': True}
+        opts = {'outtmpl': '%(title)s.%(ext)s', 'quiet': True,'ignoreerrors':True, 'nooverwrites':True,'download_archive':'.descarregats'}
         if self.cbMP3.isChecked():
             opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
