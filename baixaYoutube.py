@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 #Software gràfic per descarregar vídeos de plataformes de vídeo tals com pot ser YouTube
 #(english license below)
 #Copyright (C) 2019  Oriol Martí i Rodríguez
@@ -31,6 +33,7 @@
 
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QFileDialog, QLabel, QProgressBar, QCheckBox, QAction, QScrollArea, QComboBox
 from PyQt5.QtGui import QFont, QKeySequence
@@ -218,7 +221,6 @@ class DescarregaFil(QThread):
         self.num_thread=num_thread
         def hook(d):
             try:
-                print(d)
                 self.actualitzaBarra.emit(d['filename'],d['downloaded_bytes'],d['total_bytes'],self.num_thread)
                 #self.lbl.setText(d['filename'])
                 #self.progressBar.setMaximum(d['total_bytes'])
