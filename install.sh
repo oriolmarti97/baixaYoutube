@@ -9,7 +9,7 @@ elif [ -x "$(command -v yum)" ]; then
 	yum install python3 python3-pip
 else 
 	echo "Gestor de paquets no detectat!"
-	echo "Instala manualment python3 i el pip i executa les seguents comandes"
+	echo "Instal·la manualment python3 i el pip i executa les següents comandes"
 	echo "pip3 install youtube-dl"
 	echo "pip3 install PyQt5"
 	exit
@@ -18,7 +18,7 @@ fi
 pip3 install youtube-dl PyQt5
 
 if [[ $# -lt 1 ]]; then
-	echo "Instalant a la ubicació predeterminada"
+	echo "Instal·lant a la ubicació predeterminada"
 	mv baixaYoutube.py /usr/bin/baixaYoutube
 else
 	echo "Instalant a la ubicacio $1"
